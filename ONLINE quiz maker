@@ -1,0 +1,256 @@
+1. Install dependencies
+bash
+Copy
+Edit
+mkdir quiz-maker-backend
+cd quiz-maker-backend
+npm init -y
+npm install express mongoose bcryptjs jsonwebtoken cors dotenv
+npm install nodemon --save-dev
+2. server.js
+javascript
+Copy
+Edit
+const express = require('express');
+const mongoose = require('mongoose');
+const cors = require('cors');
+require('dotenv').config();
+
+const app = express();
+app.use(cors());
+app.use(express.json());
+
+app.use('/api/auth', require('./routes/auth'));
+app.use('/api/quiz', require('./routes/quiz'));
+app.use('/api/attempt', require('./routes/attempt'));
+app.use('/api/leaderboard', require('./routes/leaderboard'));
+
+mongoose.connect(process.env.MONGO_URI)
+  .then(() => app.listen(process.env.PORT, () => console.log('Server running')))
+  .catch((err) => console.log(err));
+3. Models
+models/User.js
+javascript
+Copy
+Edit
+const mongoose = require('mongoose');
+
+const UserSchema = new mongoose.Schema({
+  name: String,
+  email: { type: String, unique: true },
+  password: String,
+  role: { type: String, enum: ['creator', 'user'], default: 'user' }
+});
+
+module.exports = mongoose.model('User', UserSchema);
+models/Quiz.js
+javascript
+Copy
+Edit
+const mongoose = require('mongoose');
+
+const QuizSchema = new mongoose.Schema({
+  title: String,
+  description: String,
+  questions: [{
+    question: String,
+    options: [String],
+    correctOption: Number
+  }],
+  createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
+});
+
+module.exports = mongoose.model('Quiz', QuizSchema);
+models/Attempt.js
+javascript
+Copy
+Edit
+const mongoose = require('mongoose');
+
+const AttemptSchema = new mongoose.Schema({
+  user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  quiz: { type: mongoose.Schema.Types.ObjectId, ref: 'Quiz' },
+  score: Number
+}, { timestamps: true });
+
+module.exports = mongoose.model('Attempt', AttemptSchema);
+4. Routes
+routes/auth.js
+javascript
+Copy
+Edit
+const express = require('express');
+const router = express.Router();
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+const User = require('../models/User');
+
+// Register
+router.post('/register', async (req, res) => {
+  const { name, email, password, role } = req.body;
+  const hashed = await bcrypt.hash(password, 10);
+  const user = new User({ name, email, password: hashed, role });
+  await user.save();
+  res.send('User registered');
+});
+
+// Login
+router.post('/login', async (req, res) => {
+  const { email, password } = req.body;
+  const user = await User.findOne({ email });
+  if (!user) return res.status(400).send('User not found');
+  const isMatch = await bcrypt.compare(password, user.password);
+  if (!isMatch) return res.status(400).send('Invalid credentials');
+  const token = jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET);
+  res.json({ token });
+});
+
+module.exports = router;
+routes/quiz.js
+javascript
+Copy
+Edit
+const express = require('express');
+const router = express.Router();
+const Quiz = require('../models/Quiz');
+
+// Create a Quiz
+router.post('/', async (req, res) => {
+  const quiz = new Quiz(req.body);
+  await quiz.save();
+  res.json(quiz);
+});
+
+// Get all Quizzes
+router.get('/', async (req, res) => {
+  const quizzes = await Quiz.find();
+  res.json(quizzes);
+});
+
+// Get one Quiz
+router.get('/:id', async (req, res) => {
+  const quiz = await Quiz.findById(req.params.id);
+  res.json(quiz);
+});
+
+module.exports = router;
+routes/attempt.js
+javascript
+Copy
+Edit
+const express = require('express');
+const router = express.Router();
+const Attempt = require('../models/Attempt');
+
+// Submit Attempt
+router.post('/', async (req, res) => {
+  const { user, quiz, score } = req.body;
+  const attempt = new Attempt({ user, quiz, score });
+  await attempt.save();
+  res.json(attempt);
+});
+
+module.exports = router;
+routes/leaderboard.js
+javascript
+Copy
+Edit
+const express = require('express');
+const router = express.Router();
+const Attempt = require('../models/Attempt');
+
+router.get('/:quizId', async (req, res) => {
+  const attempts = await Attempt.find({ quiz: req.params.quizId })
+    .populate('user', 'name')
+    .sort({ score: -1 })
+    .limit(10);
+  res.json(attempts);
+});
+
+module.exports = router;
+🎨 Frontend Code Starter (React + Tailwind)
+1. Create frontend
+bash
+Copy
+Edit
+npx create-react-app quiz-maker-frontend
+cd quiz-maker-frontend
+npm install axios react-router-dom
+npm install -D tailwindcss postcss autoprefixer
+npx tailwindcss init -p
+Set up tailwind.config.js and src/index.css same as before.
+
+2. Pages
+bash
+Copy
+Edit
+/src
+  /pages
+    Home.jsx
+    QuizCreate.jsx
+    QuizAttempt.jsx
+    Leaderboard.jsx
+    Login.jsx
+    Register.jsx
+3. Example: Home.jsx
+javascript
+Copy
+Edit
+import React, { useEffect, useState } from 'react';
+import axios from 'axios';
+import { Link } from 'react-router-dom';
+
+const Home = () => {
+  const [quizzes, setQuizzes] = useState([]);
+
+  useEffect(() => {
+    axios.get('http://localhost:5000/api/quiz')
+      .then(res => setQuizzes(res.data))
+      .catch(err => console.log(err));
+  }, []);
+
+  return (
+    <div className="p-8">
+      <h1 className="text-3xl font-bold mb-6">Available Quizzes</h1>
+      <div className="grid gap-4">
+        {quizzes.map(quiz => (
+          <div key={quiz._id} className="p-4 border rounded shadow hover:shadow-lg">
+            <h2 className="text-xl font-semibold">{quiz.title}</h2>
+            <p className="text-gray-600">{quiz.description}</p>
+            <Link to={`/quiz/${quiz._id}`} className="text-blue-500 mt-2 block">Start Quiz</Link>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+export default Home;
+4. Basic Routing
+javascript
+Copy
+Edit
+import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
+import Home from './pages/Home';
+import Login from './pages/Login';
+import Register from './pages/Register';
+import QuizAttempt from './pages/QuizAttempt';
+import QuizCreate from './pages/QuizCreate';
+import Leaderboard from './pages/Leaderboard';
+
+function App() {
+  return (
+    <Router>
+      <Routes>
+        <Route path="/" element={<Home />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
+        <Route path="/quiz/:id" element={<QuizAttempt />} />
+        <Route path="/create" element={<QuizCreate />} />
+        <Route path="/leaderboard/:quizId" element={<Leaderboard />} />
+      </Routes>
+    </Router>
+  );
+}
+
+export default App;
