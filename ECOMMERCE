@@ -1,0 +1,279 @@
+Backend (Node.js + Express)
+bash
+Copy
+Edit
+/routes
+    auth.js
+    products.js
+    orders.js
+/models
+    User.js
+    Product.js
+    Order.js
+/middleware
+    authMiddleware.js
+server.js
+Database Collections
+Users → { name, email, password, isAdmin }
+
+Products → { title, description, price, category, imageUrl }
+
+Orders → { userId, products: [{productId, quantity}], totalPrice, status }
+
+🖥️ Backend Code Starter
+1. Install backend dependencies
+bash
+Copy
+Edit
+mkdir ecommerce-backend
+cd ecommerce-backend
+npm init -y
+npm install express mongoose bcryptjs jsonwebtoken cors dotenv
+npm install nodemon --save-dev
+2. server.js
+javascript
+Copy
+Edit
+const express = require('express');
+const mongoose = require('mongoose');
+const cors = require('cors');
+require('dotenv').config();
+
+const app = express();
+app.use(cors());
+app.use(express.json());
+
+app.use('/api/auth', require('./routes/auth'));
+app.use('/api/products', require('./routes/products'));
+app.use('/api/orders', require('./routes/orders'));
+
+mongoose.connect(process.env.MONGO_URI)
+  .then(() => app.listen(process.env.PORT, () => console.log('Server Running')))
+  .catch((err) => console.log(err));
+3. Models
+models/User.js
+javascript
+Copy
+Edit
+const mongoose = require('mongoose');
+
+const UserSchema = new mongoose.Schema({
+  name: String,
+  email: { type: String, unique: true },
+  password: String,
+  isAdmin: { type: Boolean, default: false }
+});
+
+module.exports = mongoose.model('User', UserSchema);
+models/Product.js
+javascript
+Copy
+Edit
+const mongoose = require('mongoose');
+
+const ProductSchema = new mongoose.Schema({
+  title: String,
+  description: String,
+  price: Number,
+  category: String,
+  imageUrl: String
+});
+
+module.exports = mongoose.model('Product', ProductSchema);
+models/Order.js
+javascript
+Copy
+Edit
+const mongoose = require('mongoose');
+
+const OrderSchema = new mongoose.Schema({
+  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  products: [
+    {
+      productId: { type: mongoose.Schema.Types.ObjectId, ref: 'Product' },
+      quantity: Number
+    }
+  ],
+  totalPrice: Number,
+  status: { type: String, default: 'Pending' }
+}, { timestamps: true });
+
+module.exports = mongoose.model('Order', OrderSchema);
+4. Routes
+routes/auth.js
+javascript
+Copy
+Edit
+const express = require('express');
+const router = express.Router();
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+const User = require('../models/User');
+
+// Register
+router.post('/register', async (req, res) => {
+  const { name, email, password } = req.body;
+  const hashed = await bcrypt.hash(password, 10);
+  const user = new User({ name, email, password: hashed });
+  await user.save();
+  res.send('User registered');
+});
+
+// Login
+router.post('/login', async (req, res) => {
+  const { email, password } = req.body;
+  const user = await User.findOne({ email });
+  if (!user) return res.status(400).send('User not found');
+  const isMatch = await bcrypt.compare(password, user.password);
+  if (!isMatch) return res.status(400).send('Invalid credentials');
+  const token = jwt.sign({ id: user._id, isAdmin: user.isAdmin }, process.env.JWT_SECRET);
+  res.json({ token });
+});
+
+module.exports = router;
+routes/products.js
+javascript
+Copy
+Edit
+const express = require('express');
+const router = express.Router();
+const Product = require('../models/Product');
+
+// Add Product (Admin Only)
+router.post('/', async (req, res) => {
+  const product = new Product(req.body);
+  await product.save();
+  res.json(product);
+});
+
+// Get All Products
+router.get('/', async (req, res) => {
+  const products = await Product.find();
+  res.json(products);
+});
+
+// Get One Product
+router.get('/:id', async (req, res) => {
+  const product = await Product.findById(req.params.id);
+  res.json(product);
+});
+
+// Delete Product (Admin Only)
+router.delete('/:id', async (req, res) => {
+  await Product.findByIdAndDelete(req.params.id);
+  res.send('Product Deleted');
+});
+
+module.exports = router;
+routes/orders.js
+javascript
+Copy
+Edit
+const express = require('express');
+const router = express.Router();
+const Order = require('../models/Order');
+
+// Create Order
+router.post('/', async (req, res) => {
+  const order = new Order(req.body);
+  await order.save();
+  res.json(order);
+});
+
+// Get All Orders (Admin Only)
+router.get('/', async (req, res) => {
+  const orders = await Order.find().populate('userId', 'name');
+  res.json(orders);
+});
+
+module.exports = router;
+🎨 Frontend Code Starter (React + Tailwind)
+1. Create frontend
+bash
+Copy
+Edit
+npx create-react-app ecommerce-frontend
+cd ecommerce-frontend
+npm install axios react-router-dom
+npm install -D tailwindcss postcss autoprefixer
+npx tailwindcss init -p
+Setup Tailwind like usual (index.css + tailwind.config.js).
+
+2. Pages
+bash
+Copy
+Edit
+/src
+  /pages
+    Home.jsx
+    ProductDetails.jsx
+    Cart.jsx
+    Checkout.jsx
+    Login.jsx
+    Register.jsx
+    AdminDashboard.jsx
+3. Example: Home.jsx (Product Listing)
+javascript
+Copy
+Edit
+import React, { useEffect, useState } from 'react';
+import axios from 'axios';
+import { Link } from 'react-router-dom';
+
+const Home = () => {
+  const [products, setProducts] = useState([]);
+
+  useEffect(() => {
+    axios.get('http://localhost:5000/api/products')
+      .then(res => setProducts(res.data))
+      .catch(err => console.log(err));
+  }, []);
+
+  return (
+    <div className="p-8">
+      <h1 className="text-3xl font-bold mb-6">Products</h1>
+      <div className="grid gap-6 grid-cols-1 md:grid-cols-3">
+        {products.map(product => (
+          <div key={product._id} className="border p-4 rounded shadow hover:shadow-lg">
+            <img src={product.imageUrl} alt={product.title} className="h-40 w-full object-cover" />
+            <h2 className="text-xl font-semibold">{product.title}</h2>
+            <p className="text-gray-600">${product.price}</p>
+            <Link to={`/product/${product._id}`} className="text-blue-500 mt-2 block">View Details</Link>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+export default Home;
+4. Basic Routing
+javascript
+Copy
+Edit
+import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
+import Home from './pages/Home';
+import Login from './pages/Login';
+import Register from './pages/Register';
+import ProductDetails from './pages/ProductDetails';
+import Cart from './pages/Cart';
+import Checkout from './pages/Checkout';
+import AdminDashboard from './pages/AdminDashboard';
+
+function App() {
+  return (
+    <Router>
+      <Routes>
+        <Route path="/" element={<Home />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
+        <Route path="/product/:id" element={<ProductDetails />} />
+        <Route path="/cart" element={<Cart />} />
+        <Route path="/checkout" element={<Checkout />} />
+        <Route path="/admin" element={<AdminDashboard />} />
+      </Routes>
+    </Router>
+  );
+}
+
+export default App;
