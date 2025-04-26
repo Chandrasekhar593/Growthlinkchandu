@@ -1,0 +1,275 @@
+1. Initialize project
+bash
+Copy
+Edit
+mkdir job-board-backend
+cd job-board-backend
+npm init -y
+npm install express mongoose bcryptjs jsonwebtoken cors dotenv
+npm install nodemon --save-dev
+Add a nodemon.json:
+
+json
+Copy
+Edit
+{
+  "watch": ["server.js"]
+}
+Create a .env:
+
+env
+Copy
+Edit
+PORT=5000
+MONGO_URI=your_mongo_connection_string
+JWT_SECRET=your_jwt_secret_key
+2. server.js (basic server)
+javascript
+Copy
+Edit
+const express = require('express');
+const mongoose = require('mongoose');
+const cors = require('cors');
+require('dotenv').config();
+
+const app = express();
+
+app.use(cors());
+app.use(express.json());
+
+// Routes
+const authRoutes = require('./routes/auth');
+const jobRoutes = require('./routes/job');
+const applicationRoutes = require('./routes/application');
+
+app.use('/api/auth', authRoutes);
+app.use('/api/jobs', jobRoutes);
+app.use('/api/applications', applicationRoutes);
+
+// Connect DB and start server
+mongoose.connect(process.env.MONGO_URI)
+    .then(() => {
+        console.log('MongoDB connected');
+        app.listen(process.env.PORT, () => console.log(`Server running on ${process.env.PORT}`));
+    })
+    .catch(err => console.log(err));
+3. Models
+models/User.js
+javascript
+Copy
+Edit
+const mongoose = require('mongoose');
+
+const UserSchema = new mongoose.Schema({
+    name: String,
+    email: { type: String, unique: true },
+    password: String,
+    role: { type: String, enum: ['seeker', 'employer', 'admin'], default: 'seeker' }
+});
+
+module.exports = mongoose.model('User', UserSchema);
+models/Job.js
+javascript
+Copy
+Edit
+const mongoose = require('mongoose');
+
+const JobSchema = new mongoose.Schema({
+    title: String,
+    company: String,
+    location: String,
+    category: String,
+    salary: String,
+    description: String,
+    postedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
+}, { timestamps: true });
+
+module.exports = mongoose.model('Job', JobSchema);
+models/Application.js
+javascript
+Copy
+Edit
+const mongoose = require('mongoose');
+
+const ApplicationSchema = new mongoose.Schema({
+    job: { type: mongoose.Schema.Types.ObjectId, ref: 'Job' },
+    applicant: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    resumeUrl: String,
+    message: String
+}, { timestamps: true });
+
+module.exports = mongoose.model('Application', ApplicationSchema);
+4. Routes
+routes/auth.js
+javascript
+Copy
+Edit
+const express = require('express');
+const router = express.Router();
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+const User = require('../models/User');
+
+// Register
+router.post('/register', async (req, res) => {
+    const { name, email, password, role } = req.body;
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const user = new User({ name, email, password: hashedPassword, role });
+    await user.save();
+    res.send('User registered');
+});
+
+// Login
+router.post('/login', async (req, res) => {
+    const { email, password } = req.body;
+    const user = await User.findOne({ email });
+    if (!user) return res.status(400).send('User not found');
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) return res.status(400).send('Invalid credentials');
+    const token = jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET);
+    res.json({ token });
+});
+
+module.exports = router;
+routes/job.js
+javascript
+Copy
+Edit
+const express = require('express');
+const router = express.Router();
+const Job = require('../models/Job');
+
+// Create job
+router.post('/', async (req, res) => {
+    const job = new Job(req.body);
+    await job.save();
+    res.json(job);
+});
+
+// Get all jobs
+router.get('/', async (req, res) => {
+    const jobs = await Job.find();
+    res.json(jobs);
+});
+
+// Get single job
+router.get('/:id', async (req, res) => {
+    const job = await Job.findById(req.params.id);
+    res.json(job);
+});
+
+module.exports = router;
+routes/application.js
+javascript
+Copy
+Edit
+const express = require('express');
+const router = express.Router();
+const Application = require('../models/Application');
+
+// Apply to a job
+router.post('/', async (req, res) => {
+    const application = new Application(req.body);
+    await application.save();
+    res.json(application);
+});
+
+module.exports = router;
+🎨 Frontend — React + Tailwind (Job Board UI)
+1. Create frontend app
+bash
+Copy
+Edit
+npx create-react-app job-board-frontend
+cd job-board-frontend
+npm install axios react-router-dom
+npm install -D tailwindcss postcss autoprefixer
+npx tailwindcss init -p
+Setup tailwind.config.js:
+
+javascript
+Copy
+Edit
+module.exports = {
+  content: ["./src/**/*.{js,jsx,ts,tsx}"],
+  theme: { extend: {} },
+  plugins: [],
+}
+Update src/index.css:
+
+css
+Copy
+Edit
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+2. Main Pages Structure
+bash
+Copy
+Edit
+/src
+  /pages
+    Home.jsx
+    JobDetail.jsx
+    Login.jsx
+    Register.jsx
+    EmployerDashboard.jsx
+3. Example: Home.jsx
+javascript
+Copy
+Edit
+import React, { useEffect, useState } from 'react';
+import axios from 'axios';
+import { Link } from 'react-router-dom';
+
+const Home = () => {
+  const [jobs, setJobs] = useState([]);
+
+  useEffect(() => {
+    axios.get('http://localhost:5000/api/jobs')
+      .then(res => setJobs(res.data))
+      .catch(err => console.log(err));
+  }, []);
+
+  return (
+    <div className="p-8">
+      <h1 className="text-3xl font-bold mb-6">Job Listings</h1>
+      <div className="grid gap-6">
+        {jobs.map(job => (
+          <div key={job._id} className="p-6 border rounded shadow hover:shadow-lg">
+            <h2 className="text-xl font-semibold">{job.title}</h2>
+            <p className="text-gray-600">{job.company} - {job.location}</p>
+            <p className="text-sm mt-2">{job.description.substring(0, 100)}...</p>
+            <Link to={`/job/${job._id}`} className="text-blue-500 hover:underline mt-3 block">View Details</Link>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+export default Home;
+4. Routing (src/App.js)
+javascript
+Copy
+Edit
+import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
+import Home from './pages/Home';
+import JobDetail from './pages/JobDetail';
+import Login from './pages/Login';
+import Register from './pages/Register';
+
+function App() {
+  return (
+    <Router>
+      <Routes>
+        <Route path="/" element={<Home />} />
+        <Route path="/job/:id" element={<JobDetail />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
+      </Routes>
+    </Router>
+  );
+}
+
+export default App;
