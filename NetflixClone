@@ -1,0 +1,196 @@
+Frontend
+bash
+Copy
+Edit
+/src
+  /components
+    Navbar.jsx
+    MovieRow.jsx
+    Banner.jsx
+  /pages
+    Home.jsx
+    Login.jsx
+    Register.jsx
+  /context
+    AuthContext.jsx
+App.js
+Backend (Optional if using simple JWT Auth)
+Otherwise you can also use Firebase Auth for faster login implementation.
+
+🖥️ Frontend Starter Code
+1. Install frontend
+bash
+Copy
+Edit
+npx create-react-app netflix-clone
+cd netflix-clone
+npm install axios react-router-dom
+npm install -D tailwindcss postcss autoprefixer
+npx tailwindcss init -p
+2. Setup TMDB API Key
+Create a .env file in root:
+
+ini
+Copy
+Edit
+REACT_APP_TMDB_API_KEY=your_tmdb_api_key_here
+3. Axios Instance
+Create src/api/axios.js
+
+javascript
+Copy
+Edit
+import axios from 'axios';
+
+const instance = axios.create({
+  baseURL: 'https://api.themoviedb.org/3',
+});
+
+export default instance;
+4. Movie Requests
+Create src/api/requests.js
+
+javascript
+Copy
+Edit
+const API_KEY = process.env.REACT_APP_TMDB_API_KEY;
+
+const requests = {
+  fetchTrending: `/trending/all/week?api_key=${API_KEY}&language=en-US`,
+  fetchTopRated: `/movie/top_rated?api_key=${API_KEY}&language=en-US`,
+  fetchActionMovies: `/discover/movie?api_key=${API_KEY}&with_genres=28`,
+  fetchComedyMovies: `/discover/movie?api_key=${API_KEY}&with_genres=35`,
+  fetchHorrorMovies: `/discover/movie?api_key=${API_KEY}&with_genres=27`,
+  fetchRomanceMovies: `/discover/movie?api_key=${API_KEY}&with_genres=10749`,
+  fetchDocumentaries: `/discover/movie?api_key=${API_KEY}&with_genres=99`,
+};
+
+export default requests;
+5. Home Page
+Create src/pages/Home.jsx
+
+javascript
+Copy
+Edit
+import React from 'react';
+import requests from '../api/requests';
+import Banner from '../components/Banner';
+import MovieRow from '../components/MovieRow';
+
+function Home() {
+  return (
+    <div className="bg-black text-white">
+      <Banner />
+      <MovieRow title="Trending Now" fetchUrl={requests.fetchTrending} />
+      <MovieRow title="Top Rated" fetchUrl={requests.fetchTopRated} />
+      <MovieRow title="Action Movies" fetchUrl={requests.fetchActionMovies} />
+      <MovieRow title="Comedy Movies" fetchUrl={requests.fetchComedyMovies} />
+      <MovieRow title="Horror Movies" fetchUrl={requests.fetchHorrorMovies} />
+      <MovieRow title="Romance Movies" fetchUrl={requests.fetchRomanceMovies} />
+      <MovieRow title="Documentaries" fetchUrl={requests.fetchDocumentaries} />
+    </div>
+  );
+}
+
+export default Home;
+6. Movie Row Component
+Create src/components/MovieRow.jsx
+
+javascript
+Copy
+Edit
+import React, { useEffect, useState } from 'react';
+import axios from '../api/axios';
+
+const baseImgUrl = 'https://image.tmdb.org/t/p/original/';
+
+function MovieRow({ title, fetchUrl }) {
+  const [movies, setMovies] = useState([]);
+
+  useEffect(() => {
+    async function fetchData() {
+      const request = await axios.get(fetchUrl);
+      setMovies(request.data.results);
+    }
+    fetchData();
+  }, [fetchUrl]);
+
+  return (
+    <div className="p-6">
+      <h2 className="text-xl font-bold mb-4">{title}</h2>
+      <div className="flex overflow-x-scroll space-x-4 p-2 scrollbar-hide">
+        {movies.map(movie => (
+          <img
+            key={movie.id}
+            className="h-48 object-cover rounded-lg transform hover:scale-110 transition"
+            src={`${baseImgUrl}${movie.poster_path}`}
+            alt={movie.name}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export default MovieRow;
+7. Banner Component (Top Poster)
+Create src/components/Banner.jsx
+
+javascript
+Copy
+Edit
+import React, { useEffect, useState } from 'react';
+import axios from '../api/axios';
+import requests from '../api/requests';
+
+const baseImgUrl = 'https://image.tmdb.org/t/p/original/';
+
+function Banner() {
+  const [movie, setMovie] = useState([]);
+
+  useEffect(() => {
+    async function fetchData() {
+      const request = await axios.get(requests.fetchTrending);
+      setMovie(request.data.results[Math.floor(Math.random() * request.data.results.length)]);
+    }
+    fetchData();
+  }, []);
+
+  return (
+    <header
+      className="h-[60vh] bg-cover bg-center flex flex-col justify-center p-8"
+      style={{
+        backgroundImage: `url(${baseImgUrl}${movie?.backdrop_path})`,
+      }}
+    >
+      <h1 className="text-4xl font-bold">{movie?.title || movie?.name}</h1>
+      <p className="w-1/3 mt-4 text-sm text-gray-300">{movie?.overview?.substring(0, 150)}...</p>
+      <div className="mt-4">
+        <button className="px-4 py-2 bg-white text-black font-semibold rounded mr-2">Play</button>
+        <button className="px-4 py-2 bg-gray-500 text-white font-semibold rounded">My List</button>
+      </div>
+    </header>
+  );
+}
+
+export default Banner;
+8. Auth Pages (Login / Register)
+Just simple login/register pages initially.
+You can later integrate Firebase Auth OR simple Node.js JWT Auth.
+
+🎨 Styling
+Use TailwindCSS for fast, responsive UI!
+
+Example for hiding scroll:
+
+css
+Copy
+Edit
+/* src/index.css */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
